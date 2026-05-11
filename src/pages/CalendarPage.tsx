@@ -251,7 +251,14 @@ export default function CalendarPage() {
                   <span className={`w-14 text-xs font-medium shrink-0 ${
                     ev.impact === "high" ? "text-red-400" : ev.impact === "medium" ? "text-amber-400" : "text-blue-400"
                   }`}>{ev.impact}</span>
-                  <span className="w-10 text-xs text-zinc-400 shrink-0">{ev.currency}</span>
+                  <div className="w-40 shrink-0 flex flex-wrap gap-1">
+                    {(ev.symbols || ev.currency).split(",").slice(0, 3).map(s => (
+                      <span key={s} className="text-[10px] bg-white/[0.04] text-zinc-300 px-1.5 py-0.5 rounded">{s}</span>
+                    ))}
+                    {(ev.symbols || "").split(",").length > 3 && (
+                      <span className="text-[10px] text-zinc-500">+{ev.symbols!.split(",").length - 3}</span>
+                    )}
+                  </div>
                   <span className="text-zinc-200 truncate">{ev.event}</span>
                 </div>
               ))}
