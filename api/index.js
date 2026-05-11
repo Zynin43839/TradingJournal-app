@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const { exec } = require("child_process");
 
 const { migrate } = require("./migrate");
 const { createCrudRoutes } = require("./routes/crud");
@@ -52,6 +53,31 @@ registerSessionRoutes(app);
 registerPlanRoutes(app);
 registerSettingsRoutes(app);
 registerHealthRoutes(app);
+
+// ── Fetch economic calendar via Python script (local dev only) ──
+app.post("/api/fetch-calendar", (req, res) => {
+  const { symbols, days } = req.body || {};
+  const scriptPath = path.join(__dirname, "..", "scripts", "news_free.py");
+
+  let cmd = `python "${scriptPath}" --today`;
+  if (days) cmd += ` --days ${days}`;
+  if (symbols) cmd += ` --symbols ${symbols}`;
+  cmd += ` --api-url http://localhost:3000`;
+
+  const child = exec(cmd, {
+    encoding: "utf-8",
+    timeout: 90000,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+  }, (err, stdout, stderr) => {
+    if (err) {
+      const detail = (stderr || err.message).split("\n").filter(l => !l.includes("DeprecationWarning") && !l.includes("warnings.warn")).slice(-5).join("\n");
+      console.error("[fetch-calendar]", detail);
+      return res.status(500).json({ error: "Python script failed", detail });
+    }
+    const lines = stdout.split("\n").filter(l => l.includes("Done:") || l.includes("Got"));
+    res.json({ ok: true, output: lines.join("; ") });
+  });
+});
 
 // ── Serve frontend (local dev) ──
 const frontendPath = path.join(__dirname, "..", "dist");

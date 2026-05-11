@@ -13,11 +13,6 @@ function getDb() {
 
 function typedArg(arg) {
   if (arg === null || arg === undefined) return { type: "null" };
-  if (typeof arg === "number") {
-    return Number.isInteger(arg)
-      ? { type: "integer", value: arg }
-      : { type: "real", value: arg };
-  }
   return { type: "text", value: String(arg) };
 }
 

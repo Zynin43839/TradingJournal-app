@@ -184,5 +184,7 @@ export interface EconomicEvent {
   forecast: string;
   previous: string;
   actual: string;
+  time_bkk?: string;
+  datetime_bkk?: string;
   created_at: string;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, Calendar as CalendarIcon, AlertTriangle, Info, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Calendar as CalendarIcon, AlertTriangle, Info, ChevronDown, ChevronRight } from "lucide-react";
 import { get, post, del, EconomicEvent } from "../api";
 
 const IMPACTS = ["high", "medium", "low"] as const;
@@ -22,7 +22,8 @@ function groupByDate(events: EconomicEvent[]): [string, EconomicEvent[]][] {
 }
 
 function isToday(dateStr: string) {
-  return dateStr === new Date().toISOString().split("T")[0];
+  const bkk = new Date(Date.now() + 7 * 3600_000);
+  return dateStr === bkk.toISOString().split("T")[0];
 }
 
 export default function CalendarPage() {
@@ -30,6 +31,7 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [fetching, setFetching] = useState(false);
   const [form, setForm] = useState({ date: "", currency: "USD", event: "", impact: "medium" as EconomicEvent["impact"], forecast: "", previous: "", actual: "" });
 
   useEffect(() => { load(); }, [filter]);
@@ -63,6 +65,18 @@ export default function CalendarPage() {
     load();
   }
 
+  async function handleFetchCalendar() {
+    setFetching(true);
+    try {
+      await post("/fetch-calendar", {});
+      await load();
+    } catch (err) {
+      console.error("Fetch calendar failed:", err);
+    } finally {
+      setFetching(false);
+    }
+  }
+
   const grouped = useMemo(() => groupByDate(events), [events]);
   const toggleDate = (d: string) => {
     const n = new Set(collapsed);
@@ -84,6 +98,9 @@ export default function CalendarPage() {
             <option value="">All Currencies</option>
             {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          <button className="btn btn-purple flex items-center gap-2" onClick={handleFetchCalendar} disabled={fetching}>
+            <RefreshCw size={16} className={fetching ? "animate-spin" : ""} /> {fetching ? "Fetching..." : "Fetch Calendar"}
+          </button>
           <button className="btn btn-teal flex items-center gap-2" onClick={() => setShowForm(true)}>
             <Plus size={16} /> Add Event
           </button>
@@ -131,9 +148,12 @@ export default function CalendarPage() {
                 <div className="divide-y divide-white/[0.04]">
                   {dayEvents.map(e => (
                     <div key={e.id} className="flex items-center px-5 py-3 hover:bg-white/[0.02] transition-colors group">
-                      <div className="flex-1 grid grid-cols-[1fr_100px_80px_80px_80px_80px_30px] gap-3 items-center text-sm">
+                      <div className="flex-1 grid grid-cols-[1fr_56px_80px_80px_80px_80px_80px_30px] gap-3 items-center text-sm">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="font-medium text-zinc-200 truncate">{e.event}</span>
+                        </div>
+                        <div className="text-xs text-zinc-500 font-mono">
+                          {e.time_bkk || "-"}
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-zinc-400">{e.currency}</span>

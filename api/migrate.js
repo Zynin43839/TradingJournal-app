@@ -110,6 +110,7 @@ async function migrate() {
       impact TEXT DEFAULT 'medium',
       forecast TEXT DEFAULT '', previous TEXT DEFAULT '',
       actual TEXT DEFAULT '',
+      time_bkk TEXT DEFAULT '', datetime_bkk TEXT DEFAULT '',
       created_at TEXT
     )`,
   ];
@@ -128,6 +129,14 @@ async function migrate() {
   ];
   for (const sql of indexes) {
     try { await query({ sql }); } catch (e) { /* ignore */ }
+  }
+
+  const alterTable = [
+    "ALTER TABLE economic_events ADD COLUMN time_bkk TEXT DEFAULT ''",
+    "ALTER TABLE economic_events ADD COLUMN datetime_bkk TEXT DEFAULT ''",
+  ];
+  for (const sql of alterTable) {
+    try { await query({ sql }); } catch (e) { /* ignore (column may already exist) */ }
   }
 
   console.log("  Database migrated successfully");
