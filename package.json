@@ -1,0 +1,16 @@
+{
+  "name": "ai-journal-trading-app",
+  "version": "1.0.0",
+  "description": "Trading Journal + Focus App — Vercel + Turso deployment",
+  "private": true,
+  "scripts": {
+    "dev": "node api/index.js",
+    "build": "echo 'Frontend is pre-built in frontend/dist/'",
+    "start": "node api/index.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0"
+  }
+}
