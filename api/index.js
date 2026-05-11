@@ -4,12 +4,9 @@ const path = require("path");
 
 const { migrate } = require("./migrate");
 const { createCrudRoutes } = require("./routes/crud");
-const registerFocusRoutes = require("./routes/focus");
 const registerTradingRoutes = require("./routes/trading");
 const registerSessionRoutes = require("./routes/sessions");
 const registerPlanRoutes = require("./routes/plans");
-const registerSignalRoutes = require("./routes/signals");
-const registerDailyPlanRoutes = require("./routes/daily-plans");
 const registerSettingsRoutes = require("./routes/settings");
 const registerHealthRoutes = require("./routes/health");
 
@@ -18,14 +15,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// ── Auto CRUD for tables ──
+// ── Auto CRUD for tables we need ──
 const crudTables = [
-  "trading_logs", "trades", "tasks", "learning_log",
-  "rag_diary", "studio_notes", "notebooklm_notes", "vault_files",
-  "backtest_journey", "backtest_sessions", "plan_sessions",
-  "plan_templates", "plan_versions", "backtest_test_runs",
-  "signal_logs", "trade_executions", "news_logs",
-  "system_logs", "strategy_tuner_log"
+  "trades", "trading_logs", "trading_plans",
+  "plan_sessions", "plan_templates", "plan_versions",
+  "backtest_journey", "backtest_sessions", "backtest_test_runs",
+  "settings", "economic_events",
 ];
 
 for (const table of crudTables) {
@@ -33,17 +28,14 @@ for (const table of crudTables) {
 }
 
 // ── Custom routes ──
-registerFocusRoutes(app);
 registerTradingRoutes(app);
 registerSessionRoutes(app);
 registerPlanRoutes(app);
-registerSignalRoutes(app);
-registerDailyPlanRoutes(app);
 registerSettingsRoutes(app);
 registerHealthRoutes(app);
 
-// ── Serve frontend ──
-const frontendPath = path.join(__dirname, "..", "frontend", "dist");
+// ── Serve frontend (local dev) ──
+const frontendPath = path.join(__dirname, "..", "dist");
 app.use(express.static(frontendPath));
 app.get("*", (_req, res) => {
   res.sendFile(path.join(frontendPath, "index.html"));
