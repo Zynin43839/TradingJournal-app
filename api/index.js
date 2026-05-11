@@ -41,6 +41,26 @@ app.get("*", (_req, res) => {
   res.sendFile(path.join(frontendPath, "index.html"));
 });
 
+// ── Diagnostic endpoints ──
+app.get("/api/ping", (_req, res) => {
+  res.json({ ok: true, node: process.version, platform: process.platform });
+});
+
+app.get("/api/diag", (_req, res) => {
+  const hasUrl = !!process.env.TURSO_DB_URL;
+  const hasToken = !!process.env.TURSO_AUTH_TOKEN;
+  const urlPrefix = process.env.TURSO_DB_URL
+    ? process.env.TURSO_DB_URL.replace(/\/\/.*@/, "//***@").substring(0, 40)
+    : "not set";
+  res.json({
+    ok: hasUrl && hasToken,
+    hasUrl,
+    hasToken,
+    urlPrefix,
+    node: process.version,
+  });
+});
+
 // ── Run migrations on startup ──
 migrate().catch(console.error);
 
