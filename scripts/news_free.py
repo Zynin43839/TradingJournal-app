@@ -41,6 +41,12 @@ SYMBOL_CURRENCY_MAP = {
     "XNGUSD": ["USD"],
 }
 
+# Inverse: currency → list of trading symbols affected
+CURRENCY_SYMBOLS_MAP: dict[str, list[str]] = {}
+for sym, currencies in SYMBOL_CURRENCY_MAP.items():
+    for c in currencies:
+        CURRENCY_SYMBOLS_MAP.setdefault(c, []).append(sym)
+
 
 def _now_bkk() -> datetime:
     return datetime.utcnow() + BKK_OFFSET
@@ -67,8 +73,11 @@ def _to_bkk(dt_utc) -> tuple[str, str]:
     return bkk.strftime("%H:%M"), bkk.strftime("%Y-%m-%d %H:%M ICT")
 
 
-def fetch_events(days_ahead: int = 7, today_only: bool = False, symbols: list[str] | None = None) -> list[dict]:
+def fetch_events(days_ahead: int = 7, today_only: bool = False, symbols: list[str] | None = None, no_post: bool = False) -> list[dict]:
     """Fetch economic calendar events via ecocal (free, no API key)."""
+    def _log(msg: str):
+        (print if not no_post else lambda m: print(m, file=sys.stderr))(msg)
+
     try:
         from ecocal import Calendar
     except ImportError:
@@ -81,10 +90,10 @@ def fetch_events(days_ahead: int = 7, today_only: bool = False, symbols: list[st
     if today_only:
         start = now
         end = now + timedelta(days=1)
-        print(f"[FREE] Fetching events for today ({now_bkk.date()} Bangkok time)...")
+        _log(f"[FREE] Fetching events for today ({now_bkk.date()} Bangkok time)...")
     else:
         end = now + timedelta(days=days_ahead)
-        print(f"[FREE] Fetching events {now.date()} → {end.date()}...")
+        _log(f"[FREE] Fetching events {now.date()} → {end.date()}...")
 
     try:
         cal = Calendar(
@@ -100,7 +109,7 @@ def fetch_events(days_ahead: int = 7, today_only: bool = False, symbols: list[st
         sys.exit(1)
 
     if df is None or len(df) == 0:
-        print("[FREE] No events found")
+        _log("[FREE] No events found")
         return []
 
     filter_currencies: set[str] | None = None
@@ -111,7 +120,7 @@ def fetch_events(days_ahead: int = 7, today_only: bool = False, symbols: list[st
             if s in SYMBOL_CURRENCY_MAP:
                 filter_currencies.update(SYMBOL_CURRENCY_MAP[s])
             else:
-                print(f"[FREE] Warning: unknown symbol '{sym}', ignoring")
+                print(f"[FREE] Warning: unknown symbol '{sym}', ignoring", file=sys.stderr)
 
     def _safe(val, default=""):
         if val is None:
@@ -146,11 +155,14 @@ def fetch_events(days_ahead: int = 7, today_only: bool = False, symbols: list[st
         if filter_currencies and currency not in filter_currencies:
             continue
 
+        symbols = CURRENCY_SYMBOLS_MAP.get(currency, [currency])
+
         results.append({
             "date": datetime_bkk[:10] if datetime_bkk else (_safe(date_utc)[:10] or datetime.utcnow().strftime("%Y-%m-%d")),
             "time_bkk": time_bkk,
             "datetime_bkk": datetime_bkk,
             "currency": currency,
+            "symbols": ",".join(symbols),
             "event": event_name,
             "impact": impact,
             "forecast": _safe(row.get("consensus")),
@@ -158,7 +170,7 @@ def fetch_events(days_ahead: int = 7, today_only: bool = False, symbols: list[st
             "actual": _safe(row.get("actual")),
         })
 
-    print(f"[FREE] Got {len(results)} events")
+    _log(f"[FREE] Got {len(results)} events")
     return results
 
 
@@ -195,6 +207,14 @@ def push_to_api(events: list[dict], api_base: str, dry_run: bool = False):
     print(f"\n[FREE] Done: {pushed} pushed, {skipped} skipped")
 
 
+def _log(msg: str, no_post: bool = False):
+    """Print to stderr when no_post is set (keeps stdout clean for JSON)."""
+    if no_post:
+        print(msg, file=sys.stderr)
+    else:
+        print(msg)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Free economic calendar fetcher (no API key)")
     parser.add_argument("--days", type=int, default=7, help="Days ahead to fetch (default: 7)")
@@ -205,14 +225,15 @@ def main():
     parser.add_argument("--no-post", action="store_true", help="Output JSON to stdout only")
     args = parser.parse_args()
 
+    no_post = args.no_post
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] if args.symbols else None
     if symbols:
-        print(f"[FREE] Filtering symbols: {', '.join(symbols)}")
+        _log(f"[FREE] Filtering symbols: {', '.join(symbols)}", no_post)
 
-    events = fetch_events(args.days, today_only=args.today, symbols=symbols)
+    events = fetch_events(args.days, today_only=args.today, symbols=symbols, no_post=no_post)
 
     if not events:
-        print("[FREE] No events to push")
+        _log("[FREE] No events to push", no_post)
         return
 
     if args.no_post:

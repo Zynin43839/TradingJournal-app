@@ -1,37 +1,21 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, RefreshCw, Calendar as CalendarIcon, AlertTriangle, Info, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Calendar as CalendarIcon, AlertTriangle, Info, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { get, post, del, EconomicEvent } from "../api";
 
 const IMPACTS = ["high", "medium", "low"] as const;
+const IMPACT_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD"];
 
-const impactColors: Record<string, { border: string; bg: string; dot: string; label: string }> = {
-  high: { border: "border-red-500/30", bg: "bg-red-500/5", dot: "bg-red-500", label: "text-red-400" },
-  medium: { border: "border-amber-500/30", bg: "bg-amber-500/5", dot: "bg-amber-500", label: "text-amber-400" },
-  low: { border: "border-blue-500/30", bg: "bg-blue-500/5", dot: "bg-blue-500", label: "text-blue-400" },
-};
-
-function groupByDate(events: EconomicEvent[]): [string, EconomicEvent[]][] {
-  const groups = new Map<string, EconomicEvent[]>();
-  for (const e of events) {
-    const key = e.date?.slice(0, 10) || "unknown";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(e);
-  }
-  return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-}
-
-function isToday(dateStr: string) {
-  const bkk = new Date(Date.now() + 7 * 3600_000);
-  return dateStr === bkk.toISOString().split("T")[0];
-}
+type SortKey = "time_bkk" | "symbols" | "event" | "impact";
 
 export default function CalendarPage() {
   const [events, setEvents] = useState<EconomicEvent[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [fetching, setFetching] = useState(false);
+  const [previewEvents, setPreviewEvents] = useState<EconomicEvent[] | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("time_bkk");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [form, setForm] = useState({ date: "", currency: "USD", event: "", impact: "medium" as EconomicEvent["impact"], forecast: "", previous: "", actual: "" });
 
   useEffect(() => { load(); }, [filter]);
@@ -42,6 +26,23 @@ export default function CalendarPage() {
       setEvents(data.filter(e => !filter || e.currency === filter));
     } catch { setEvents([]); }
   }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  }
+
+  const sorted = useMemo(() => {
+    const list = [...events];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "impact") cmp = (IMPACT_ORDER[a.impact] ?? 2) - (IMPACT_ORDER[b.impact] ?? 2);
+      else if (sortKey === "time_bkk") cmp = (a.time_bkk || "").localeCompare(b.time_bkk || "");
+      else cmp = ((a as any)[sortKey] || "").localeCompare((b as any)[sortKey] || "");
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [events, sortKey, sortDir]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,8 +69,8 @@ export default function CalendarPage() {
   async function handleFetchCalendar() {
     setFetching(true);
     try {
-      await post("/fetch-calendar", {});
-      await load();
+      const data = await post<{ events: EconomicEvent[]; count: number }>("/fetch-calendar", {});
+      setPreviewEvents(data.events);
     } catch (err) {
       console.error("Fetch calendar failed:", err);
     } finally {
@@ -77,12 +78,36 @@ export default function CalendarPage() {
     }
   }
 
-  const grouped = useMemo(() => groupByDate(events), [events]);
-  const toggleDate = (d: string) => {
-    const n = new Set(collapsed);
-    if (n.has(d)) n.delete(d); else n.add(d);
-    setCollapsed(n);
-  };
+  async function handleAddAllPreview() {
+    if (!previewEvents) return;
+    setFetching(true);
+    try {
+      for (const ev of previewEvents) {
+        await post("/economic_events", ev);
+      }
+      setPreviewEvents(null);
+      await load();
+    } catch (err) {
+      console.error("Add events failed:", err);
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  function SortIcon({ k }: { k: SortKey }) {
+    if (sortKey !== k) return <ArrowUpDown size={12} className="opacity-30" />;
+    return sortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
+  }
+
+  function Th({ k, label, className }: { k: SortKey; label: string; className?: string }) {
+    return (
+      <th className={`cursor-pointer select-none hover:text-white transition-colors ${className || ""}`} onClick={() => toggleSort(k)}>
+        <div className="flex items-center gap-1">
+          {label} <SortIcon k={k} />
+        </div>
+      </th>
+    );
+  }
 
   return (
     <div>
@@ -107,84 +132,65 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {events.length === 0 && (
+      {sorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
           <CalendarIcon size={40} className="text-zinc-700 mb-3" />
           <p className="text-sm">No events yet. Add one to get started.</p>
         </div>
+      ) : (
+        <div className="glass rounded-xl overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-white/[0.06]">
+                <Th k="time_bkk" label="Time (ICT)" className="w-24" />
+                <Th k="symbols" label="Symbol" className="w-40" />
+                <Th k="event" label="Event" />
+                <Th k="impact" label="Impact" className="w-24" />
+                <th className="w-24 text-xs text-zinc-500 font-semibold uppercase tracking-wider">Forecast</th>
+                <th className="w-24 text-xs text-zinc-500 font-semibold uppercase tracking-wider">Previous</th>
+                <th className="w-24 text-xs text-zinc-500 font-semibold uppercase tracking-wider">Actual</th>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(e => (
+                <tr key={e.id} className="group">
+                  <td className="text-xs text-zinc-500 font-mono">{e.time_bkk || "-"}</td>
+                  <td>
+                    {e.symbols ? (
+                      <div className="flex flex-wrap gap-1">
+                        {e.symbols.split(",").map(s => (
+                          <span key={s} className="text-[10px] bg-white/[0.04] text-zinc-300 px-1.5 py-0.5 rounded">{s}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-zinc-500">{e.currency}</span>
+                    )}
+                  </td>
+                  <td className="font-medium text-zinc-200 max-w-xs truncate">{e.event}</td>
+                  <td>
+                    <span className={`badge ${e.impact === "high" ? "badge-red" : e.impact === "medium" ? "badge-yellow" : "badge-blue"} flex items-center gap-1 w-fit`}>
+                      {e.impact === "high" ? <AlertTriangle size={10} /> : <Info size={10} />}
+                      {e.impact}
+                    </span>
+                  </td>
+                  <td className="text-zinc-400 text-xs">{e.forecast || "-"}</td>
+                  <td className="text-zinc-400 text-xs">{e.previous || "-"}</td>
+                  <td className={`text-xs font-medium ${e.actual ? (Number(e.actual) > Number(e.forecast || 0) ? "text-green-400" : "text-red-400") : "text-zinc-600"}`}>
+                    {e.actual || "-"}
+                  </td>
+                  <td>
+                    <button onClick={() => remove(e.id)} className="p-1 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all" title="Delete">
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      <div className="space-y-4">
-        {grouped.map(([date, dayEvents]) => {
-          const today = isToday(date);
-          const isCollapsed = collapsed.has(date);
-          const maxImpact = Math.max(...dayEvents.map(e => IMPACTS.indexOf(e.impact)));
-          const impactKey = IMPACTS[maxImpact];
-
-          return (
-            <div key={date} className={`glass rounded-xl overflow-hidden border ${today ? "border-teal-500/30" : impactColors[impactKey].border}`}>
-              {/* Date header */}
-              <button
-                onClick={() => toggleDate(date)}
-                className={`w-full flex items-center justify-between px-5 py-3 transition-colors ${today ? "bg-teal-500/10" : impactColors[impactKey].bg}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${impactColors[impactKey].dot}`} />
-                  <div className="text-left">
-                    <span className={`font-semibold text-sm ${today ? "text-teal-400" : "text-white"}`}>
-                      {new Date(date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-                    </span>
-                    {today && <span className="ml-2 text-[10px] bg-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded-full">TODAY</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-zinc-500">{dayEvents.length} event{dayEvents.length > 1 ? "s" : ""}</span>
-                  {isCollapsed ? <ChevronRight size={14} className="text-zinc-500" /> : <ChevronDown size={14} className="text-zinc-500" />}
-                </div>
-              </button>
-
-              {/* Events */}
-              {!isCollapsed && (
-                <div className="divide-y divide-white/[0.04]">
-                  {dayEvents.map(e => (
-                    <div key={e.id} className="flex items-center px-5 py-3 hover:bg-white/[0.02] transition-colors group">
-                      <div className="flex-1 grid grid-cols-[1fr_56px_80px_80px_80px_80px_80px_30px] gap-3 items-center text-sm">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium text-zinc-200 truncate">{e.event}</span>
-                        </div>
-                        <div className="text-xs text-zinc-500 font-mono">
-                          {e.time_bkk || "-"}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-zinc-400">{e.currency}</span>
-                        </div>
-                        <div>
-                          <span className={`badge ${e.impact === "high" ? "badge-red" : e.impact === "medium" ? "badge-yellow" : "badge-blue"} flex items-center gap-1`}>
-                            {e.impact === "high" ? <AlertTriangle size={10} /> : <Info size={10} />}
-                            {e.impact}
-                          </span>
-                        </div>
-                        <div className="text-zinc-400 text-xs">{e.forecast || "-"}</div>
-                        <div className="text-zinc-400 text-xs">{e.previous || "-"}</div>
-                        <div className={`text-xs font-medium ${e.actual ? (Number(e.actual) > Number(e.forecast || 0) ? "text-green-400" : "text-red-400") : "text-zinc-600"}`}>
-                          {e.actual || "-"}
-                        </div>
-                        <div className="flex justify-end">
-                          <button onClick={() => remove(e.id)} className="p-1 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all" title="Delete">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Add Event Modal */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -226,6 +232,37 @@ export default function CalendarPage() {
                 <button type="submit" className="btn btn-teal">Save</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {previewEvents && (
+        <div className="modal-overlay" onClick={() => setPreviewEvents(null)}>
+          <div className="modal max-w-3xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">Preview Events ({previewEvents.length})</h2>
+              <span className="text-xs text-zinc-500">Bangkok timezone (ICT)</span>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto divide-y divide-white/[0.04] mb-4">
+              {previewEvents.map((ev, i) => (
+                <div key={i} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="w-12 text-xs text-zinc-500 font-mono shrink-0">{ev.time_bkk || "-"}</span>
+                  <span className={`w-14 text-xs font-medium shrink-0 ${
+                    ev.impact === "high" ? "text-red-400" : ev.impact === "medium" ? "text-amber-400" : "text-blue-400"
+                  }`}>{ev.impact}</span>
+                  <span className="w-10 text-xs text-zinc-400 shrink-0">{ev.currency}</span>
+                  <span className="text-zinc-200 truncate">{ev.event}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button className="btn btn-ghost" onClick={() => setPreviewEvents(null)}>Cancel</button>
+              <button className="btn btn-teal" onClick={handleAddAllPreview} disabled={fetching}>
+                {fetching ? "Adding..." : `Add ${previewEvents.length} Events to Calendar`}
+              </button>
+            </div>
           </div>
         </div>
       )}

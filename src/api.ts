@@ -186,5 +186,6 @@ export interface EconomicEvent {
   actual: string;
   time_bkk?: string;
   datetime_bkk?: string;
+  symbols?: string;
   created_at: string;
 }
