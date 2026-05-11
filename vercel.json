@@ -20,9 +20,5 @@
       "src": "/(.*)",
       "dest": "/frontend/dist/index.html"
     }
-  ],
-  "env": {
-    "TURSO_DB_URL": "@turso_db_url",
-    "TURSO_AUTH_TOKEN": "@turso_auth_token"
-  }
+  ]
 }
