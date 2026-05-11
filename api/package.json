@@ -1,6 +1,7 @@
 {
   "name": "api",
   "version": "1.0.0",
+  "type": "commonjs",
   "dependencies": {
     "@tursodatabase/serverless": "^1.1.3",
     "cors": "^2.8.5",
