@@ -16,7 +16,7 @@ function createCrudRoutes(app, table) {
       const offset = parseInt(req.query.offset) || 0;
       const r = await getDb().execute({ sql: `SELECT * FROM ${table} ORDER BY id DESC LIMIT ? OFFSET ?`, args: [limit, offset] });
       res.json(r.rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error(`GET /api/${table}:`, err.message); res.status(500).json({ error: err.message }); }
   });
 
   app.post(`/api/${table}`, async (req, res) => {
@@ -31,7 +31,7 @@ function createCrudRoutes(app, table) {
       const vals = keys.map(() => "?").join(",");
       await getDb().execute({ sql: `INSERT OR REPLACE INTO ${table} (${keys.join(",")}) VALUES (${vals})`, args: keys.map(k => input[k]) });
       res.json(input);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error(`POST /api/${table}:`, err.message); res.status(500).json({ error: err.message }); }
   });
 
   app.put(`/api/${table}/:id`, async (req, res) => {
@@ -48,7 +48,7 @@ function createCrudRoutes(app, table) {
       }
       const r = await getDb().execute({ sql: `SELECT * FROM ${table} WHERE id = ?`, args: [req.params.id] });
       res.json(r.rows[0] || { success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error(`PUT /api/${table}:`, err.message); res.status(500).json({ error: err.message }); }
   });
 
   app.delete(`/api/${table}/:id`, async (req, res) => {
@@ -56,7 +56,7 @@ function createCrudRoutes(app, table) {
       const r = await getDb().execute({ sql: `DELETE FROM ${table} WHERE id = ?`, args: [req.params.id] });
       if (r.rowsAffected === 0) return res.status(404).json({ error: "Not found" });
       res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error(`DELETE /api/${table}:`, err.message); res.status(500).json({ error: err.message }); }
   });
 
   app.post(`/api/${table}/sync`, async (req, res) => {
@@ -85,7 +85,7 @@ function createCrudRoutes(app, table) {
         await db.execute({ sql: "ROLLBACK" });
         throw e;
       }
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error(`SYNC /api/${table}:`, err.message); res.status(500).json({ error: err.message }); }
   });
 }
 
