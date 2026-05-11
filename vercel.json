@@ -1,6 +1,8 @@
 {
   "version": 2,
-  "nodeVersion": "20.x",
+  "functions": {
+    "api/index.js": { "runtime": "nodejs20.x" }
+  },
   "builds": [
     { "src": "api/index.js", "use": "@vercel/node" },
     { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
