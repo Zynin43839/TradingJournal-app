@@ -152,6 +152,7 @@ export interface BacktestEntry {
   timeframe: string;
   emotion_before: string;
   notes: string;
+  plan_id: string;
   created_at: string;
 }
 
