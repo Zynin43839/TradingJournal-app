@@ -1,7 +1,6 @@
-const { getDb } = require("./db");
+const { query } = require("./db");
 
 async function migrate() {
-  const db = getDb();
 
   const tables = [
     `CREATE TABLE IF NOT EXISTS trades (
@@ -116,7 +115,7 @@ async function migrate() {
   ];
 
   for (const sql of tables) {
-    try { await db.execute({ sql }); } catch (e) { console.error("Migration error:", e.message); }
+    try { await query({ sql }); } catch (e) { console.error("Migration error:", e.message); }
   }
 
   const indexes = [
@@ -128,7 +127,7 @@ async function migrate() {
     "CREATE INDEX IF NOT EXISTS idx_trading_logs_date ON trading_logs(date)",
   ];
   for (const sql of indexes) {
-    try { await db.execute({ sql }); } catch (e) { /* ignore */ }
+    try { await query({ sql }); } catch (e) { /* ignore */ }
   }
 
   console.log("  Database migrated successfully");

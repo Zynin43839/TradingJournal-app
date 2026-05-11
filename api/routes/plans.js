@@ -1,7 +1,6 @@
-const { getDb } = require("../db");
+const { query } = require("../db");
 
 module.exports = function registerPlanRoutes(app) {
-  const db = () => getDb();
 
   app.put("/api/plans/:id/status", async (req, res) => {
     try {
@@ -14,7 +13,7 @@ module.exports = function registerPlanRoutes(app) {
       if (status === 'executed' && execution_notes) updates.execution_notes = execution_notes;
       const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
       const vals = [...Object.values(updates), req.params.id];
-      await db().execute({ sql: `UPDATE trading_plans SET ${setClauses} WHERE id = ?`, args: vals });
+      await query({ sql: `UPDATE trading_plans SET ${setClauses} WHERE id = ?`, args: vals });
       res.json({ ok: true, ...updates });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -25,7 +24,7 @@ module.exports = function registerPlanRoutes(app) {
     try {
       const { actual_outcome, followed_plan, review_notes, lessons_learned, actual_result, actual_pnl, market_moved_as_predicted, invalidation_hit } = req.body;
       const now = new Date().toISOString();
-      await db().execute({
+      await query({
         sql: "UPDATE trading_plans SET actual_outcome = ?, followed_plan = ?, review_notes = ?, lessons_learned = ?, review_completed = 1, actual_result = ?, actual_pnl = ?, market_moved_as_predicted = ?, invalidation_hit = ?, review_completed_at = ?, updated_at = ? WHERE id = ?",
         args: [actual_outcome || '', followed_plan !== undefined ? followed_plan : null, review_notes || '', lessons_learned || '', actual_result || '', actual_pnl || 0, market_moved_as_predicted !== undefined ? market_moved_as_predicted : null, invalidation_hit !== undefined ? invalidation_hit : null, now, now, req.params.id]
       });
@@ -37,7 +36,7 @@ module.exports = function registerPlanRoutes(app) {
 
   app.get("/api/plans/:id/backtest-results", async (req, res) => {
     try {
-      const entries = (await db().execute({
+      const entries = (await query({
         sql: "SELECT * FROM backtest_journey WHERE plan_id = ? ORDER BY date ASC",
         args: [req.params.id]
       })).rows;
@@ -50,7 +49,7 @@ module.exports = function registerPlanRoutes(app) {
   app.put("/api/backtest_entries/:id/link-plan", async (req, res) => {
     try {
       const { plan_id } = req.body;
-      await db().execute({ sql: "UPDATE backtest_journey SET plan_id = ? WHERE id = ?", args: [plan_id || '', req.params.id] });
+      await query({ sql: "UPDATE backtest_journey SET plan_id = ? WHERE id = ?", args: [plan_id || '', req.params.id] });
       res.json({ ok: true, plan_id: plan_id || '' });
     } catch (err) {
       res.status(500).json({ error: err.message });

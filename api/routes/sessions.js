@@ -1,14 +1,13 @@
-const { getDb } = require("../db");
+const { query } = require("../db");
 
 module.exports = function registerSessionRoutes(app) {
-  const db = () => getDb();
 
   app.get("/api/plan_sessions/:id/stats", async (req, res) => {
     try {
-      const session = (await db().execute({ sql: "SELECT * FROM plan_sessions WHERE id = ?", args: [req.params.id] })).rows[0];
+      const session = (await query({ sql: "SELECT * FROM plan_sessions WHERE id = ?", args: [req.params.id] })).rows[0];
       if (!session) return res.status(404).json({ error: "Session not found" });
 
-      const planCounts = (await db().execute({
+      const planCounts = (await query({
         sql: `SELECT COUNT(*) as total,
           SUM(CASE WHEN type = 'short' THEN 1 ELSE 0 END) as short_count,
           SUM(CASE WHEN type = 'long' THEN 1 ELSE 0 END) as long_count
@@ -16,7 +15,7 @@ module.exports = function registerSessionRoutes(app) {
         args: [req.params.id]
       })).rows[0];
 
-      const plans = (await db().execute({
+      const plans = (await query({
         sql: "SELECT * FROM trading_plans WHERE session_id = ? ORDER BY created_at DESC",
         args: [req.params.id]
       })).rows;
@@ -29,7 +28,7 @@ module.exports = function registerSessionRoutes(app) {
 
   app.get("/api/plan_sessions/:id/plans", async (req, res) => {
     try {
-      const plans = (await db().execute({
+      const plans = (await query({
         sql: "SELECT * FROM trading_plans WHERE session_id = ? ORDER BY created_at DESC",
         args: [req.params.id]
       })).rows;
@@ -43,7 +42,7 @@ module.exports = function registerSessionRoutes(app) {
     try {
       const { review_notes, lessons_learned } = req.body;
       const now = new Date().toISOString();
-      await db().execute({
+      await query({
         sql: "UPDATE plan_sessions SET review_completed = 1, review_notes = ?, lessons_learned = ?, updated_at = ? WHERE id = ?",
         args: [review_notes || '', lessons_learned || '', now, req.params.id]
       });
@@ -55,10 +54,10 @@ module.exports = function registerSessionRoutes(app) {
 
   app.get("/api/backtest_sessions/:id/stats", async (req, res) => {
     try {
-      const session = (await db().execute({ sql: "SELECT * FROM backtest_sessions WHERE id = ?", args: [req.params.id] })).rows[0];
+      const session = (await query({ sql: "SELECT * FROM backtest_sessions WHERE id = ?", args: [req.params.id] })).rows[0];
       if (!session) return res.status(404).json({ error: "Session not found" });
 
-      const overview = (await db().execute({
+      const overview = (await query({
         sql: `SELECT COUNT(*) as total,
           SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) as wins,
           SUM(CASE WHEN result = 'Loss' THEN 1 ELSE 0 END) as losses,
@@ -72,22 +71,22 @@ module.exports = function registerSessionRoutes(app) {
         args: [req.params.id]
       })).rows[0];
 
-      const bySymbol = (await db().execute({
+      const bySymbol = (await query({
         sql: "SELECT symbol, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / COUNT(*), 1) as wr FROM backtest_journey WHERE session_id = ? GROUP BY symbol ORDER BY cnt DESC",
         args: [req.params.id]
       })).rows;
 
-      const byDirection = (await db().execute({
+      const byDirection = (await query({
         sql: "SELECT direction, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / COUNT(*), 1) as wr FROM backtest_journey WHERE session_id = ? GROUP BY direction",
         args: [req.params.id]
       })).rows;
 
-      const byRegime = (await db().execute({
+      const byRegime = (await query({
         sql: "SELECT market_condition, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl FROM backtest_journey WHERE session_id = ? GROUP BY market_condition ORDER BY cnt DESC",
         args: [req.params.id]
       })).rows;
 
-      const recent = (await db().execute({
+      const recent = (await query({
         sql: "SELECT * FROM backtest_journey WHERE session_id = ? ORDER BY date DESC, id DESC LIMIT 10",
         args: [req.params.id]
       })).rows;
@@ -100,7 +99,7 @@ module.exports = function registerSessionRoutes(app) {
 
   app.get("/api/backtest_sessions/:id/entries", async (req, res) => {
     try {
-      const entries = (await db().execute({
+      const entries = (await query({
         sql: "SELECT * FROM backtest_journey WHERE session_id = ? ORDER BY date DESC, id DESC",
         args: [req.params.id]
       })).rows;
@@ -112,10 +111,10 @@ module.exports = function registerSessionRoutes(app) {
 
   app.get("/api/backtest_sessions/:id/dashboard", async (req, res) => {
     try {
-      const session = (await db().execute({ sql: "SELECT * FROM backtest_sessions WHERE id = ?", args: [req.params.id] })).rows[0];
+      const session = (await query({ sql: "SELECT * FROM backtest_sessions WHERE id = ?", args: [req.params.id] })).rows[0];
       if (!session) return res.status(404).json({ error: "Session not found" });
 
-      const entries = (await db().execute({
+      const entries = (await query({
         sql: "SELECT * FROM backtest_journey WHERE session_id = ? ORDER BY date ASC, id ASC",
         args: [req.params.id]
       })).rows;
@@ -154,38 +153,38 @@ module.exports = function registerSessionRoutes(app) {
         else if (e.result === 'Loss') { curLoss++; curWin = 0; if (curLoss > maxLossStreak) maxLossStreak = curLoss; }
       });
 
-      const bySymbol = (await db().execute({
+      const bySymbol = (await query({
         sql: "SELECT symbol, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) as wr FROM backtest_journey WHERE session_id = ? GROUP BY symbol ORDER BY pnl DESC",
         args: [req.params.id]
       })).rows;
 
-      const byDirection = (await db().execute({
+      const byDirection = (await query({
         sql: "SELECT direction, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) as wr FROM backtest_journey WHERE session_id = ? GROUP BY direction",
         args: [req.params.id]
       })).rows;
 
-      const bySetup = (await db().execute({
+      const bySetup = (await query({
         sql: "SELECT setup_name, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) as wr FROM backtest_journey WHERE session_id = ? AND setup_name != '' GROUP BY setup_name ORDER BY pnl DESC",
         args: [req.params.id]
       })).rows;
 
-      const byRegime = (await db().execute({
+      const byRegime = (await query({
         sql: "SELECT market_condition, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) as wr FROM backtest_journey WHERE session_id = ? GROUP BY market_condition",
         args: [req.params.id]
       })).rows;
 
-      const byTimeframe = (await db().execute({
+      const byTimeframe = (await query({
         sql: "SELECT timeframe, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) as wr FROM backtest_journey WHERE session_id = ? AND timeframe != '' GROUP BY timeframe ORDER BY cnt DESC",
         args: [req.params.id]
       })).rows;
 
-      const bySession = (await db().execute({
+      const bySession = (await query({
         sql: "SELECT session, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl, ROUND(100.0 * SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) as wr FROM backtest_journey WHERE session_id = ? AND session != '' GROUP BY session ORDER BY cnt DESC",
         args: [req.params.id]
       })).rows;
 
       const baseDate = new Date(0);
-      const byDayOfWeekRaw = (await db().execute({
+      const byDayOfWeekRaw = (await query({
         sql: "SELECT date, COUNT(*) as cnt, ROUND(SUM(pnl), 2) as pnl FROM backtest_journey WHERE session_id = ? GROUP BY date ORDER BY date",
         args: [req.params.id]
       })).rows;
@@ -200,7 +199,7 @@ module.exports = function registerSessionRoutes(app) {
       const byDayOfWeek = Object.values(dowMap).sort((a, b) => a.dow - b.dow);
 
       const dailyPnl = byDayOfWeekRaw;
-      const recent = (await db().execute({
+      const recent = (await query({
         sql: "SELECT * FROM backtest_journey WHERE session_id = ? ORDER BY date DESC, id DESC LIMIT 15",
         args: [req.params.id]
       })).rows;
@@ -217,7 +216,7 @@ module.exports = function registerSessionRoutes(app) {
 
   app.get("/api/backtest_sessions/:sessionId/test_runs", async (req, res) => {
     try {
-      const runs = (await db().execute({
+      const runs = (await query({
         sql: "SELECT * FROM backtest_test_runs WHERE session_id = ? ORDER BY created_at DESC",
         args: [req.params.sessionId]
       })).rows;
@@ -232,7 +231,7 @@ module.exports = function registerSessionRoutes(app) {
       const r = req.body;
       const id = r.id || `run_${Date.now()}`;
       const now = new Date().toISOString();
-      await db().execute({
+      await query({
         sql: `INSERT INTO backtest_test_runs (id, session_id, name, description, setup_name, start_date, end_date, total_candles, completed_candles, status, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [id, req.params.sessionId, r.name || 'Test Run', r.description || '', r.setup_name || '', r.start_date || '', r.end_date || '', r.total_candles || 0, r.completed_candles || 0, r.status || 'in_progress', now, now]
@@ -247,7 +246,7 @@ module.exports = function registerSessionRoutes(app) {
     try {
       const r = req.body;
       const now = new Date().toISOString();
-      await db().execute({
+      await query({
         sql: "UPDATE backtest_test_runs SET name=?, description=?, setup_name=?, start_date=?, end_date=?, total_candles=?, completed_candles=?, status=?, updated_at=? WHERE id=?",
         args: [r.name, r.description || '', r.setup_name || '', r.start_date || '', r.end_date || '', r.total_candles ?? 0, r.completed_candles ?? 0, r.status || 'in_progress', now, req.params.id]
       });
@@ -259,8 +258,8 @@ module.exports = function registerSessionRoutes(app) {
 
   app.delete("/api/backtest_test_runs/:id", async (req, res) => {
     try {
-      await db().execute({ sql: "DELETE FROM backtest_test_runs WHERE id = ?", args: [req.params.id] });
-      await db().execute({ sql: "DELETE FROM backtest_journey WHERE test_run_id = ?", args: [req.params.id] });
+      await query({ sql: "DELETE FROM backtest_test_runs WHERE id = ?", args: [req.params.id] });
+      await query({ sql: "DELETE FROM backtest_journey WHERE test_run_id = ?", args: [req.params.id] });
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -330,18 +329,18 @@ module.exports = function registerSessionRoutes(app) {
       }
 
       if (rows.length > 0) {
-        await db().execute({ sql: "BEGIN" });
+        await query({ sql: "BEGIN" });
         try {
           for (const row of rows) {
-            await db().execute({
+            await query({
               sql: `INSERT INTO backtest_journey (id, session_id, date, symbol, direction, entry_price, exit_price, sl_price, tp_price, lot_size, pnl, rr_ratio, result, status, setup_name, notes, plan_id, test_run_id, commission, swap, slippage, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               args: row
             });
           }
-          await db().execute({ sql: "COMMIT" });
+          await query({ sql: "COMMIT" });
         } catch (e) {
-          await db().execute({ sql: "ROLLBACK" });
+          await query({ sql: "ROLLBACK" });
           throw e;
         }
       }
