@@ -65,20 +65,25 @@ app.post("/api/fetch-calendar", (req, res) => {
 
   exec(cmd, {
     encoding: "utf-8",
-    timeout: 90000,
+    timeout: 120000,
     env: { ...process.env, PYTHONIOENCODING: "utf-8" },
   }, (err, stdout, stderr) => {
     if (err) {
-      const detail = (stderr || err.message).split("\n").filter(l => !l.includes("DeprecationWarning") && !l.includes("warnings.warn")).slice(-5).join("\n");
-      console.error("[fetch-calendar]", detail);
-      return res.status(500).json({ error: "Python script failed", detail });
+      const allStderr = (stderr || "").trim();
+      const msg = allStderr || err.message;
+      console.error("[fetch-calendar] FAILED:", err.killed ? "TIMEOUT/KILLED" : err.code, "| stderr:", msg.slice(0, 500));
+      return res.status(500).json({ error: "Python script failed", detail: msg.split("\n").slice(-5).join("\n") });
     }
     const jsonStart = stdout.indexOf("[");
-    if (jsonStart === -1) return res.json({ events: [], count: 0 });
+    if (jsonStart === -1) {
+      console.error("[fetch-calendar] No JSON in stdout:", stdout.slice(0, 200));
+      return res.json({ events: [], count: 0 });
+    }
     try {
       const events = JSON.parse(stdout.slice(jsonStart));
       res.json({ events, count: events.length });
     } catch (e) {
+      console.error("[fetch-calendar] JSON parse error:", e.message);
       res.status(500).json({ error: "Failed to parse Python output", detail: e.message });
     }
   });
