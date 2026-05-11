@@ -15,6 +15,25 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
+// ── Request logger (for debugging on Vercel) ──
+app.use((req, _res, next) => {
+  console.log(`[${req.method}] ${req.path}`);
+  next();
+});
+
+// ── Diagnostic endpoints (before catch-all!) ──
+app.get("/api/ping", (_req, res) => {
+  res.json({ ok: true, node: process.version, platform: process.platform });
+});
+app.get("/api/diag", (_req, res) => {
+  const hasUrl = !!process.env.TURSO_DB_URL;
+  const hasToken = !!process.env.TURSO_AUTH_TOKEN;
+  const urlPrefix = process.env.TURSO_DB_URL
+    ? process.env.TURSO_DB_URL.replace(/\/\/.*@/, "//***@").substring(0, 40)
+    : "not set";
+  res.json({ ok: hasUrl && hasToken, hasUrl, hasToken, urlPrefix, node: process.version });
+});
+
 // ── Auto CRUD for tables we need ──
 const crudTables = [
   "trades", "trading_logs", "trading_plans",
@@ -39,26 +58,6 @@ const frontendPath = path.join(__dirname, "..", "dist");
 app.use(express.static(frontendPath));
 app.get("*", (_req, res) => {
   res.sendFile(path.join(frontendPath, "index.html"));
-});
-
-// ── Diagnostic endpoints ──
-app.get("/api/ping", (_req, res) => {
-  res.json({ ok: true, node: process.version, platform: process.platform });
-});
-
-app.get("/api/diag", (_req, res) => {
-  const hasUrl = !!process.env.TURSO_DB_URL;
-  const hasToken = !!process.env.TURSO_AUTH_TOKEN;
-  const urlPrefix = process.env.TURSO_DB_URL
-    ? process.env.TURSO_DB_URL.replace(/\/\/.*@/, "//***@").substring(0, 40)
-    : "not set";
-  res.json({
-    ok: hasUrl && hasToken,
-    hasUrl,
-    hasToken,
-    urlPrefix,
-    node: process.version,
-  });
 });
 
 // ── Run migrations on startup ──
